@@ -50,7 +50,7 @@ class Command(BaseCommand):
             raise CommandError('fail to send message: ' + repr(e))
     
     def _send_message(self, chat_id, message):
-        token = Misc.objects.get('telegram_token').value
+        token = Misc.objects.get(key='telegram_token').value
         body = parse.urlencode({'chat_id': chat_id, 'text': message}, encoding='utf-8')
         response = request.urlopen('https://api.telegram.org/bot%s/sendMessage' % token, data=body.encode())
         self.stdout.write('%s: %s...' % (chat_id, response.read()[:16].decode()))
