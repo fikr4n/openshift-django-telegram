@@ -22,7 +22,7 @@ def index(request):
 def update(request):
     access_token = request.GET.get('auth', '')
     if request.method == 'POST' and access_token == Misc.objects.get(
-            key='valid_access_token').value:  # authorized
+            key='webservice_token').value:  # authorized
         request_body = request.body.decode()
         response = TelegramHandler(request_body).handle()
         if response:
@@ -54,7 +54,7 @@ class TelegramHandler(object):
             new_participant = message.get('new_chat_participant')
             left_participant = message.get('left_chat_participant')
             user = left_participant or new_participant
-            if user and str(user['id']) == Misc.objects.get(key='my_user_id').value:
+            if user and str(user['id']) == Misc.objects.get(key='bot_user_id').value:
                 # bot added or removed
                 if left_participant:  # removed from group
                     Subscriber.objects.filter(pk=chat_id).update(

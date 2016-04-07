@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from urllib import request, parse
 from django.core.management.base import BaseCommand, CommandError
 from django.db.models import Q
-from obiwankenoweb.models import Reminder, Subscriber, Misc
+from obiwankenoweb.models import Reminder, Misc
 
 
 class Command(BaseCommand):
@@ -50,7 +50,7 @@ class Command(BaseCommand):
             raise CommandError('fail to send message: ' + repr(e))
     
     def _send_message(self, chat_id, message):
-        token = os.environ['OBIWAN_TELEGRAM_TOKEN']
+        token = Misc.objects.get('telegram_token').value
         body = parse.urlencode({'chat_id': chat_id, 'text': message}, encoding='utf-8')
         response = request.urlopen('https://api.telegram.org/bot%s/sendMessage' % token, data=body.encode())
         self.stdout.write('%s: %s...' % (chat_id, response.read()[:16].decode()))
