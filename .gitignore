@@ -7,5 +7,4 @@
 .pydevproject
 
 /wsgi/obiwanproject/db.sqlite3
-/wsgi/obiwanproject/log/
 /.idea/workspace.xml
