@@ -1,8 +1,10 @@
+import math
 from django.db import IntegrityError
 from django.http import HttpResponse, HttpResponseForbidden
 from django.utils import timezone
+from django.utils.formats import date_format, time_format, number_format, get_format_lazy
 from django.views.decorators.csrf import csrf_exempt
-from django.template.defaultfilters import date as format_date, slugify
+from django.template.defaultfilters import slugify
 import json
 import re
 import logging
@@ -12,6 +14,25 @@ from .models import Misc, Subscriber, Location, Reminder
 from iclib import salat, qibla
 
 tgramupd_logger = logging.getLogger(__name__ + '.tgramupd')
+
+
+def timezone_format(x):
+    f, i = math.modf(x)
+    return 'UTC%+03.0f%02.0f' % (i, abs(f * 60))
+
+
+def parse_date_time(x):
+    try:
+        tzinfo = datetime.strptime(x[-5:], '%z').tzinfo
+        x = x[:-5].rstrip()
+    except ValueError:
+        tzinfo = timezone.get_default_timezone()
+
+    for i in get_format_lazy('DATETIME_INPUT_FORMATS'):
+        try:
+            return datetime.strptime(x, i).replace(tzinfo=tzinfo)
+        except ValueError:
+            pass
 
 
 def index(request):
@@ -72,8 +93,8 @@ class TelegramHandler(object):
             recipient = m.group(3)
             arg += m.group(4)
             try:
-                reply = getattr(self, '_command_' + command)(command=command,
-                    recipient=recipient, arg=arg, chat_id=chat_id)
+                reply = getattr(self, '_command_' + command)(command=command, recipient=recipient, arg=arg,
+                                                             chat_id=chat_id)
             except AttributeError:
                 if recipient:  # unknown command, explicit recipient
                     reply = random.choice([
@@ -109,8 +130,8 @@ class TelegramHandler(object):
             return 'Afwan, ane belum tahu lokasi "%s" ada dimana.' % location_name
 
         direction = qibla.direction(l.lat, l.lng)
-        return '🕌 Arah qiblat untuk {} (koordinat {:n}, {:n}) adalah {:n}° dari utara (searah jarum jam).'.format(
-            l.city, l.lat, l.lng, direction)
+        return '🕌 Arah qiblat untuk {} (koordinat {}, {}) adalah {}° dari utara (searah jarum jam).'.format(
+            l.city, number_format(l.lat), number_format(l.lng), number_format(direction, 2))
 
     @staticmethod
     def _command_jadwalshalat(arg, **kwargs):
@@ -125,15 +146,16 @@ class TelegramHandler(object):
             location(l.lat, l.lng, l.alt, l.tz). \
             method('muhammadiyah').calculate()
         return '''🕌 Jadwal shalat {} untuk {}
-(koordinat {:n}, {:n}; ketinggian {:n} mdpl; zona waktu UTC{:+n}):
+(koordinat {}, {}; ketinggian {} mdpl; zona waktu {}):
 
 Shubuh - {}
 Syuruq - {}
 Zhuhur - {}
 Ashar - {}
 Maghrib - {}
-Isya - {}'''.format(date.strftime('%d-%b-%Y'), l.city, l.lat, l.lng, l.alt, l.tz,
-                    *[t.get_time(i).strftime('%H:%M') for i in range(salat.N)])
+Isya - {}'''.format(date_format(date), l.city, number_format(l.lat), number_format(l.lng), number_format(l.alt, -2),
+                    timezone_format(l.tz),
+                    *[time_format(t.get_time(i)) for i in range(salat.N)])
 
     @staticmethod
     def _command_agenda(chat_id, **kwargs):
@@ -145,50 +167,56 @@ Isya - {}'''.format(date.strftime('%d-%b-%Y'), l.city, l.lat, l.lng, l.alt, l.tz
 
     @staticmethod
     def _command_buatagenda(chat_id, arg, **kwargs):
-        args = arg.split(maxsplit=2)
-        if len(args) != 3:
+        args = arg.split('\n', maxsplit=1)
+        if len(args) != 2:
             return '''\
-/buatagenda <THN>-<BLN>-<TGL> <JAM>:<MNT>[<ZONA>] <JUDUL AGENDA>
-<DESKRIPSI AGENDA>
+/buatagenda <WAKTU>[<ZONA_WAKTU>]
+<JUDUL AGENDA>
+[<DESKRIPSI AGENDA>]
 
-Contoh zona waktu adalah +0700 untuk WIB. Jika zona waktu tidak ditentukan, dianggap +0700.
+Jika zona waktu tidak ditentukan, dianggap +0700, wakni WIB.
 Contoh:
 
-/buatagenda 2016-12-31 16:00 Rapat Akhir Tahun
+/buatagenda 31-12-2016 16.00
+Rapat Akhir Tahun (format Indonesia)
 
-atau:
+/buatagenda 2016-12-31 16:00
+Rapat Akhir Tahun (format waktu ISO)
 
-/buatagenda 2016-12-31 16:00+0900 Rapat Akhir Tahun
-Catatan: Bawa konsumsi masing-masing'''
-        arg_time = args[0] + ' ' + args[1]
-        try:
-            t = datetime.strptime(arg_time, '%Y-%m-%d %H:%M%z')
-        except ValueError:
-            try:
-                t = datetime.strptime(arg_time + '+0700', '%Y-%m-%d %H:%M%z')
-            except ValueError:
-                return 'Maaf, format waktunya salah, ane nggak ngerti.'
+/buatagenda 31-12-2016 16.00+0900
+Rapat Akhir Tahun (zona WIT)
+Catatan tambahan: Bawa konsumsi masing-masing'''
+
+        arg_time, arg_text = args
+        t = parse_date_time(arg_time.strip())
+        if not t:
+            return 'Maaf, format waktunya salah, ane nggak ngerti.'
         reminder_t = (t.replace(hour=21, minute=0, second=0) - timedelta(days=1)).astimezone(timezone.UTC())
-        message = '📅 %s\n✒ %s' % (t.strftime('%d-%b-%Y %H:%M'), args[2])
+        message = '📅 %s %s\n✒ %s' % (date_format(t), time_format(t), arg_text)
         try:
             Reminder.objects.create(year=reminder_t.year, month=reminder_t.month, mday=reminder_t.day,
-                                    hour=reminder_t.hour, message=message, subscriber_id=chat_id, type='EV')
+                                    hour=reminder_t.hour, message=message, subscriber_id=chat_id, type=Reminder.EVENT)
             return 'Agenda ditambahkan.'
         except IntegrityError:
             return 'Afwan, saat ini agenda cuma dapat digunakan di dalam grup.'
 
     @staticmethod
     def _command_hapusagenda(chat_id, arg, **kwargs):
+        magic_nonnegative = '2'
+        magic_negative = '1'
+        magic_init = 6123
+
         def from_id(x):
-            return ('1' if x < 0 else '2') + str(abs(x) + 6123)
+            return (magic_negative if x < 0 else magic_nonnegative) + str(abs(x) + magic_init)
 
         def to_id(x):
-            return (int(x[1:]) - 6123) * (-1 if x.startswith('1') else 1)
+            return (int(x[1:]) - magic_init) * (-1 if x.startswith(magic_negative) else 1)
 
         arg = arg.strip()
         if not arg:
             reply = []
-            for event in Reminder.objects.filter(subscriber_id=chat_id, type='EV').order_by('year', 'month', 'mday'):
+            for event in Reminder.objects.filter(subscriber_id=chat_id, type=Reminder.EVENT).\
+                    order_by('year', 'month', 'mday'):
                 reply.append('/hapusagenda_%s %s' % (from_id(event.pk), slugify(event.message[:40])))
             return '\n'.join(reply) or 'Tidak ada agenda.'
         try:
