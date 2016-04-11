@@ -170,8 +170,8 @@ Isya - {}'''.format(date_format(date), l.city, number_format(l.lat), number_form
         args = arg.split('\n', maxsplit=1)
         if len(args) != 2:
             return '''\
-/buatagenda <WAKTU>[<ZONA WAKTU>]⏎
-<JUDUL AGENDA>⏎
+/buatagenda <WAKTU>[<ZONA WAKTU>]↩️
+<JUDUL AGENDA>↩️
 [<DESKRIPSI TAMBAHAN>]
 
 Jika zona waktu tidak ditentukan, dianggap +0700, wakni WIB.
