@@ -130,7 +130,7 @@ class TelegramHandler(object):
             return 'Afwan, ane belum tahu lokasi "%s" ada dimana.' % location_name
 
         direction = qibla.direction(l.lat, l.lng)
-        return '🕌 Arah qiblat untuk {} (koordinat {}, {}) adalah {}° dari utara (searah jarum jam).'.format(
+        return '🕋 Arah qiblat untuk {} (koordinat {}, {}) adalah {}° dari utara (searah jarum jam).'.format(
             l.city, number_format(l.lat), number_format(l.lng), number_format(direction, 2))
 
     @staticmethod
@@ -170,9 +170,9 @@ Isya - {}'''.format(date_format(date), l.city, number_format(l.lat), number_form
         args = arg.split('\n', maxsplit=1)
         if len(args) != 2:
             return '''\
-/buatagenda <WAKTU>[<ZONA_WAKTU>]
-<JUDUL AGENDA>
-[<DESKRIPSI AGENDA>]
+/buatagenda <WAKTU>[<ZONA WAKTU>]⏎
+<JUDUL AGENDA>⏎
+[<DESKRIPSI TAMBAHAN>]
 
 Jika zona waktu tidak ditentukan, dianggap +0700, wakni WIB.
 Contoh:
@@ -192,7 +192,7 @@ Catatan tambahan: Bawa konsumsi masing-masing'''
         if not t:
             return 'Maaf, format waktunya salah, ane nggak ngerti.'
         reminder_t = (t.replace(hour=21, minute=0, second=0) - timedelta(days=1)).astimezone(timezone.UTC())
-        message = '📅 %s %s\n✒ %s' % (date_format(t), time_format(t), arg_text)
+        message = '📅 %s ⌚ %s\n✒ %s' % (date_format(t), time_format(t), arg_text)
         try:
             Reminder.objects.create(year=reminder_t.year, month=reminder_t.month, mday=reminder_t.day,
                                     hour=reminder_t.hour, message=message, subscriber_id=chat_id, type=Reminder.EVENT)
